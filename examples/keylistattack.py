@@ -82,14 +82,10 @@ class KeyListDump:
                 self.__smbConnection.login(self.__username, self.__password, self.__domain, self.__lmhash,
                                            self.__nthash)
         except Exception as e:
+            self.__smbConnection = None
             if os.getenv('KRB5CCNAME') is not None and self.__doKerberos is True:
-                # SMBConnection failed. That might be because there was no way to log into the
-                # target system. We just have a last resort. Hope we have tickets cached and that they
-                # will work
-                logging.debug('SMBConnection didn\'t work, hoping Kerberos will help (%s)' % str(e))
-                pass
-            else:
-                raise
+                logging.debug('SMBConnection failed while using the Kerberos cache (%s)' % str(e))
+            raise
 
     def run(self):
         if self.__enum is True:

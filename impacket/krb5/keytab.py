@@ -122,6 +122,9 @@ class KeytabPrincipal:
         return data
 
     def __str__(self):
+        return self.getData().hex()
+
+    def __bytes__(self):
         return self.getData()
 
     def prettyPrint(self):

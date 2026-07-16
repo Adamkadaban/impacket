@@ -396,8 +396,8 @@ class OBJREF_EXTENDED(OBJREF):
         if data is None:
             self['flags'] = FLAGS_OBJREF_EXTENDED
             self['Signature1'] = 0x4E535956
-            self['Signature1'] = 0x4E535956
-            self['nElms'] = 0x4E535956
+            self['nElms'] = 1
+            self['Signature2'] = 0x4E535956
 
 # 2.2.19 DUALSTRINGARRAY
 class USHORT_ARRAY(NDRUniConformantArray):
@@ -603,16 +603,13 @@ class SpecialPropertiesData(TypeSerialization1):
         ('dwPRTFlags',DWORD),
         ('dwOrigClsctx',DWORD),
         ('dwFlags',DWORD),
-        ('Reserved0',DWORD),
-        ('Reserved0',DWORD),
-        ('Reserved', '32s=""'),
-        #('Reserved1',DWORD),
-        #('Reserved2',ULONGLONG),
-        #('Reserved3_1',DWORD),
-        #('Reserved3_2',DWORD),
-        #('Reserved3_3',DWORD),
-        #('Reserved3_4',DWORD),
-        #('Reserved3_5',DWORD),
+        ('Reserved1',DWORD),
+        ('Reserved2',ULONGLONG),
+        ('Reserved3_1',DWORD),
+        ('Reserved3_2',DWORD),
+        ('Reserved3_3',DWORD),
+        ('Reserved3_4',DWORD),
+        ('Reserved3_5',DWORD),
     )
 
 # 2.2.22.2.3 InstanceInfoData

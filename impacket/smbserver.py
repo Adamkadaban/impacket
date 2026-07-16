@@ -145,8 +145,10 @@ def outputToJohnFormat(challenge, username, domain, lmresponse, ntresponse):
     # extra bonus. We try, if it fails, returns nothing
     # ToDo: Document the parameter's types (bytes / string) and check all the places where it's called
     ret_value = ''
-    if type(challenge) is not bytes:
-        challenge = challenge.decode('latin-1')
+    if isinstance(challenge, str):
+        challenge = challenge.encode('latin-1')
+    elif not isinstance(challenge, bytes):
+        challenge = bytes(challenge)
 
     try:
         if len(ntresponse) > 24:
@@ -197,10 +199,12 @@ def writeJohnOutputToFile(hash_string, hash_version, file_name):
 
 
 def decodeSMBString(flags, text):
+    if isinstance(text, str):
+        return text
     if flags & smb.SMB.FLAGS2_UNICODE:
         return text.decode('utf-16le')
     else:
-        return text
+        return text.decode('latin-1')
 
 
 def encodeSMBString(flags, text):
@@ -677,7 +681,7 @@ class TRANSCommands:
                 respParameters = smb.SMBNetShareEnumResponse()
                 respParameters['EntriesReturned'] = len(shares)
                 respParameters['EntriesAvailable'] = len(shares)
-                tailData = ''
+                tailData = b''
                 for i in shares:
                     # NetShareInfo1 len == 20
                     entry = smb.NetShareInfo1()
@@ -687,9 +691,9 @@ class TRANSCommands:
                     entry['RemarkOffsetLow'] = 20 * len(shares) + len(tailData)
                     respData += entry.getData()
                     if 'comment' in shares[i]:
-                        tailData += shares[i]['comment'] + '\x00'
+                        tailData += shares[i]['comment'].encode('latin-1') + b'\x00'
                     else:
-                        tailData += '\x00'
+                        tailData += b'\x00'
                 respData += tailData
             else:
                 # We don't support other info levels
@@ -710,10 +714,11 @@ class TRANSCommands:
             shareInfo = smb.NetShareInfo1()
             shareInfo['NetworkName'] = request['ShareName'].upper() + '\x00'
             shareInfo['Type'] = int(share['share type'])
+            if 'comment' in share:
+                shareInfo['RemarkOffsetLow'] = len(shareInfo)
             respData = shareInfo.getData()
             if 'comment' in share:
-                shareInfo['RemarkOffsetLow'] = len(respData)
-                respData += share['comment'] + '\x00'
+                respData += share['comment'].encode('latin-1') + b'\x00'
             respParameters['TotalBytesAvailable'] = len(respData)
 
         else:
@@ -773,7 +778,7 @@ class TRANS2Commands:
             fileName = normalize_path(decodeSMBString(recvPacket['Flags2'], setPathInfoParameters['FileName']), path)
             pathName = os.path.join(path, fileName)
 
-            if isInFileJail(path, fileName):
+            if not isInFileJail(path, fileName):
                 smbServer.log("Path not in current working directory", connData=connData)
                 errorCode = STATUS_OBJECT_PATH_SYNTAX_BAD
 

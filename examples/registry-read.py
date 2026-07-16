@@ -34,16 +34,14 @@ from impacket import winregistry
 def bootKey(reg):
     baseClass = 'ControlSet001\\Control\\Lsa\\'
     keys = ['JD','Skew1','GBG','Data']
-    tmpKey = ''
+    tmpKey = b''
 
     for key in keys:
         tmpKey = tmpKey + unhexlify(reg.getClass(baseClass + key).decode('utf-16le')[:8])
 
     transforms = [ 8, 5, 4, 2, 11, 9, 13, 3, 0, 6, 1, 12, 14, 10, 15, 7 ]
 
-    syskey = ''
-    for i in range(len(tmpKey)):
-        syskey += tmpKey[transforms[i]]
+    syskey = bytes(tmpKey[index] for index in transforms)
 
     print(hexlify(syskey))
 

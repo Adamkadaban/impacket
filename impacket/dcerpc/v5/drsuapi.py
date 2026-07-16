@@ -983,8 +983,8 @@ class VALUE_META_DATA_EXT_V3(NDRSTRUCT):
         ('timeCreated',DSTIME),
         ('MetaData',PROPERTY_META_DATA_EXT),
         ('unused1',DWORD),
-        ('unused1',DWORD),
-        ('unused1',DWORD),
+        ('unused2',DWORD),
+        ('unused3',DWORD),
         ('timeExpired',DSTIME),
     )
 

@@ -227,9 +227,10 @@ class GetUserNoPreAuth:
             if str(e).find('strongerAuthRequired') < 0:
                 # Cannot authenticate, we will try to get this users' TGT (hoping it has PreAuth disabled)
                 logging.info('Cannot authenticate %s, getting its TGT' % self.__username)
-                entry = self.getTGT(self.__username)
+                self.getTGT(self.__username)
                 self.request_multiple_TGTs([self.__username])   
                 return
+            raise
 
         # Building the search filter
         searchFilter = "(&(UserAccountControl:1.2.840.113556.1.4.803:=%d)" \

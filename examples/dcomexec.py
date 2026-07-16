@@ -52,7 +52,7 @@ from impacket import version
 from impacket.dcerpc.v5.dcom.oaut import IID_IDispatch, string_to_bin, IDispatch, DISPPARAMS, DISPATCH_PROPERTYGET, \
     VARIANT, VARENUM, DISPATCH_METHOD
 from impacket.dcerpc.v5.dcomrt import DCOMConnection, COMVERSION
-from impacket.dcerpc.v5.dcomrt import OBJREF, FLAGS_OBJREF_CUSTOM, OBJREF_CUSTOM, OBJREF_HANDLER, \
+from impacket.dcerpc.v5.dcomrt import OBJREF, FLAGS_OBJREF_CUSTOM, OBJREF_HANDLER, \
     OBJREF_EXTENDED, OBJREF_STANDARD, FLAGS_OBJREF_HANDLER, FLAGS_OBJREF_STANDARD, FLAGS_OBJREF_EXTENDED, \
     IRemUnknown2, INTERFACE
 from impacket.dcerpc.v5.dtypes import NULL
@@ -89,7 +89,7 @@ class DCOMEXEC:
         objRefType = OBJREF(b''.join(resp))['flags']
         objRef = None
         if objRefType == FLAGS_OBJREF_CUSTOM:
-            objRef = OBJREF_CUSTOM(b''.join(resp))
+            raise NotImplementedError("Custom OBJREF values are not supported")
         elif objRefType == FLAGS_OBJREF_HANDLER:
             objRef = OBJREF_HANDLER(b''.join(resp))
         elif objRefType == FLAGS_OBJREF_STANDARD:
@@ -97,11 +97,11 @@ class DCOMEXEC:
         elif objRefType == FLAGS_OBJREF_EXTENDED:
             objRef = OBJREF_EXTENDED(b''.join(resp))
         else:
-            logging.error("Unknown OBJREF Type! 0x%x" % objRefType)
+            raise ValueError("Unknown OBJREF Type! 0x%x" % objRefType)
 
         return IRemUnknown2(
             INTERFACE(interface.get_cinstance(), None, interface.get_ipidRemUnknown(), objRef['std']['ipid'],
-                      oxid=objRef['std']['oxid'], oid=objRef['std']['oxid'],
+                      oxid=objRef['std']['oxid'], oid=objRef['std']['oid'],
                       target=interface.get_target()))
 
     def run(self, addr, silentCommand=False):
@@ -251,19 +251,19 @@ class RemoteShell(cmd.Cmd):
                 logging.error(str(e))
 
     def do_lget(self, src_path):
+        filename = None
         try:
             import ntpath
             newPath = ntpath.normpath(ntpath.join(self._pwd, src_path))
             drive, tail = ntpath.splitdrive(newPath)
             filename = ntpath.basename(tail)
-            fh = open(filename,'wb')
             logging.info("Downloading %s\\%s" % (drive, tail))
-            self.__transferClient.getFile(drive[:-1]+'$', tail, fh.write)
-            fh.close()
+            with open(filename, 'wb') as fh:
+                self.__transferClient.getFile(drive[:-1]+'$', tail, fh.write)
         except Exception as e:
             logging.error(str(e))
-            os.remove(filename)
-            pass
+            if filename is not None and os.path.exists(filename):
+                os.remove(filename)
 
     def do_lput(self, s):
         try:

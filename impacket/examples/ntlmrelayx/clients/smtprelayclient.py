@@ -40,7 +40,10 @@ class SMTPRelayClient(ProtocolClient):
         # self.session.debuglevel = 3
         self.session.ehlo()
 
-        if 'AUTH NTLM' not in self.session.ehlo_resp:
+        ehloResponse = self.session.ehlo_resp or b''
+        if isinstance(ehloResponse, bytes):
+            ehloResponse = ehloResponse.decode('ascii', errors='replace')
+        if 'AUTH NTLM' not in ehloResponse.upper():
             LOG.error('SMTP server does not support NTLM authentication!')
             return False
         return True

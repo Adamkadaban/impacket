@@ -332,7 +332,10 @@ if __name__ == '__main__':
        sys.exit(1)
 
     if options.uuid is not None:
-        uuids = [uuid.string_to_uuidtup(options.uuid)]
+        try:
+            uuids = [uuid.string_to_uuidtup(options.uuid)]
+        except ValueError as e:
+            parser.error(str(e))
         options.brute_uuids = True
     else:
         uuids = rpcdatabase.uuid_database

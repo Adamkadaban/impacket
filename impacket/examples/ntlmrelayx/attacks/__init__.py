@@ -59,10 +59,12 @@ class ProtocolAttack(Thread):
         self.daemon = True
         self.config = config
         self.client = client
-        # By default we only use the username and remove the domain
-        self.username = username.split('/')[1]
-        # But we also store the domain for later use
-        self.domain = username.split('/')[0]
+        identity = username.split('/', 1)
+        if len(identity) == 2:
+            self.domain, self.username = identity
+        else:
+            self.domain = ''
+            self.username = identity[0]
         # -- 
         self.target = target 
         self.relay_client = relay_client

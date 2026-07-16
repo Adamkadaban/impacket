@@ -48,6 +48,8 @@ def string_to_bin(uuid):
     # The first three components of the UUID are little-endian, and the last two are big-endian
     matches = re.match(r"([\dA-Fa-f]{8})-([\dA-Fa-f]{4})-([\dA-Fa-f]{4})-([\dA-Fa-f]{4})-([\dA-Fa-f]{4})([\dA-Fa-f]{8})",
                        uuid)
+    if matches is None:
+        raise ValueError("Invalid UUID string: %s" % uuid)
     (uuid1, uuid2, uuid3, uuid4, uuid5, uuid6) = [int(x, 16) for x in matches.groups()]
     uuid = pack('<LHH', uuid1, uuid2, uuid3)
     uuid += pack('>HHL', uuid4, uuid5, uuid6)
@@ -61,7 +63,7 @@ def stringver_to_bin(s):
 
 def uuidtup_to_bin(tup):
     if len(tup) != 2:
-        return
+        raise ValueError("UUID tuple must contain a UUID and version")
     return string_to_bin(tup[0]) + stringver_to_bin(tup[1])
 
 
@@ -89,7 +91,7 @@ def string_to_uuidtup(s):
     if g: 
         (u, v) = g.groups()
         return u, v
-    return
+    raise ValueError("UUID and optional version not found in: %s" % s)
 
 
 def uuidtup_to_string(tup):

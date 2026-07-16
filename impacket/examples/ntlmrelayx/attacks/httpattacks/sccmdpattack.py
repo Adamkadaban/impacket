@@ -123,8 +123,8 @@ class SCCMDPAttack:
             for key, value in data.items():
                 if value is None and key.endswith(tuple(self.config.SCCMDPExtensions)):
                     to_download.append(key)
-                else:
-                    to_download.extend(self.recursive_file_extract(data[key]))
+                elif isinstance(value, dict):
+                    to_download.extend(self.recursive_file_extract(value))
         return to_download
     
 
@@ -152,9 +152,12 @@ class SCCMDPAttack:
             package_ids = set()
             to_download = []
             for file in contents:
+                file = file.strip()
+                if not file:
+                    continue
                 try:
                     package_ids.add(urllib.parse.urlparse(file).path.split('/')[2])
-                    if file.strip() is not None: to_download.append(file) 
+                    to_download.append(file)
                 except:
                     LOG.error(f"(Skipping) URL has wrong format: {file}")
                     continue
@@ -188,7 +191,7 @@ class SCCMDPAttack:
         r = self.client.getresponse().read()
 
         parser = FilesAndDirsRetriever()
-        parser.feed(r.decode())
+        parser.feed(r.decode(errors='replace'))
         
         files = []
         for href in parser.links:

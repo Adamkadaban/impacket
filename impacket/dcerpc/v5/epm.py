@@ -43,7 +43,10 @@ class DCERPCSessionError(DCERPCException):
     error_messages = {}
     def __init__(self, error_string=None, error_code=None, packet=None):
         DCERPCException.__init__(self, error_string, error_code, packet)
-        self.error_code = packet['status']
+        if packet is not None:
+            self.error_code = packet['status']
+        else:
+            self.error_code = error_code
 
     def __str__( self ):
         key = self.error_code

@@ -121,10 +121,16 @@ If the value contains no realm, then default_realm will be used."""
         if isinstance (other, str):
             other = Principal (other)
 
-        return (self.type == constants.PrincipalNameType.NT_UNKNOWN.value or
-                other.type == constants.PrincipalNameType.NT_UNKNOWN.value or
-                self.type == other.type) and all (map (lambda a, b: a == b, self.components, other.components)) and \
-               self.realm == other.realm
+        if not isinstance(other, Principal):
+            return NotImplemented
+
+        selfType = getattr(self.type, 'value', self.type)
+        otherType = getattr(other.type, 'value', other.type)
+        return (
+            selfType == constants.PrincipalNameType.NT_UNKNOWN.value
+            or otherType == constants.PrincipalNameType.NT_UNKNOWN.value
+            or selfType == otherType
+        ) and self.components == other.components and self.realm == other.realm
 
     def __str__(self):
         def quote_component(comp):
@@ -172,13 +178,13 @@ class Address(object):
         if family is not None:
             return str((family, self.address))
         else:
-            return str((self.type, self.value))
+            return str((self.type, self.data))
 
     @property
     def family(self):
         if self.type == constants.AddressType.IPv4.value:
             return socket.AF_INET
-        elif self.type == constants.AddressType.IPv4.value:
+        elif self.type == constants.AddressType.IPv6.value:
             return socket.AF_INET6
         else:
             return None
@@ -187,7 +193,7 @@ class Address(object):
     def address(self):
         if self.type == constants.AddressType.IPv4.value:
             return socket.inet_pton(self.family, self.data)
-        elif self.type == constants.AddressType.IPv4.value:
+        elif self.type == constants.AddressType.IPv6.value:
             return socket.inet_pton(self.family, self.data)
         else:
             return None

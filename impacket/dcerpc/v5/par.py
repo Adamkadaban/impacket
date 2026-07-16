@@ -219,7 +219,7 @@ class SPLCLIENT_INFO_3(NDRSTRUCT):
     structure =  (
         ('cbSize',UINT),
         ('dwFlags',DWORD),
-        ('dwFlags',DWORD),
+        ('dwSize',DWORD),
         ('pMachineName',LPWSTR),
         ('pUserName',LPWSTR),
         ('dwBuildNum',DWORD),

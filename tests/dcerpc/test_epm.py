@@ -25,6 +25,15 @@ from impacket.dcerpc.v5.ndr import NULL
 from impacket.uuid import string_to_bin, uuidtup_to_bin
 
 
+class EPMLocalTests(unittest.TestCase):
+
+    def test_session_error_accepts_error_code_without_packet(self):
+        error = epm.DCERPCSessionError(error_code=5)
+
+        self.assertEqual(5, error.error_code)
+        self.assertIn("5", str(error))
+
+
 class EPMTests(DCERPCTests):
     iface_uuid = epm.MSRPC_UUID_PORTMAP
     string_binding = r"ncacn_np:{0.machine}[\pipe\epmapper]"

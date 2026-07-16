@@ -100,7 +100,7 @@ class SR_SECURITY_DESCRIPTOR(Structure):
         if self['OffsetDacl'] != 0:
             self['Dacl'] = ACL(data=data[self['OffsetDacl']:])
         else:
-            self['Sacl'] = b''
+            self['Dacl'] = b''
 
     def getData(self):
         headerlen = 20
@@ -175,13 +175,13 @@ class ACE(Structure):
             self['AceSize'] = len(self['Ace'].getData())+4 # Header size (4 bytes) is included
         if self['AceSize'] % 4 != 0:
             # Make sure the alignment is correct
-            self['AceSize'] += self['AceSize'] % 4
+            self['AceSize'] += 4 - (self['AceSize'] % 4)
         data = Structure.getData(self)
         # For some reason ACEs are sometimes longer than they need to be
         # we fill this space up with null bytes to make sure the object
         # we create is identical to the original object
         if len(data) < self['AceSize']:
-            data += '\x00' * (self['AceSize'] - len(data))
+            data += b'\x00' * (self['AceSize'] - len(data))
         return data
 
     def hasFlag(self, flag):
@@ -501,4 +501,3 @@ class LDAP_SERVER_SD_FLAGS(Enum):
     GROUP_SECURITY_INFORMATION = 0x2
     DACL_SECURITY_INFORMATION  = 0x4
     SACL_SECURITY_INFORMATION  = 0x8
-

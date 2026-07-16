@@ -143,6 +143,9 @@ class NDR(object):
         return self.fields[key]
 
     def __str__(self):
+        return self.getData().hex()
+
+    def __bytes__(self):
         return self.getData()
 
     def __len__(self):

@@ -1090,6 +1090,6 @@ class IDispatch(IRemUnknown2):
         request['pDispParams'] = pDispParams
         request['cVarRef'] = cVarRef
         request['rgVarRefIdx'] = rgVarRefIdx
-        request['rgVarRef'] = rgVarRefIdx
+        request['rgVarRef'] = rgVarRef
         resp = self.request(request, iid = self._iid, uuid = self.get_iPid())
         return resp

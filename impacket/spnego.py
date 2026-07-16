@@ -79,7 +79,7 @@ def asn1decode(data = ''):
             pad = calcsize('B') + calcsize('!H')
             len2, len3 = unpack('!BH', data[:pad])
             data = data[pad:]
-            ans = data[:len2 << 16 + len3]
+            ans = data[:(len2 << 16) + len3]
         elif len1 == 0x84:
             pad = calcsize('!L')
             len2 = unpack('!L', data[:pad])[0]
@@ -113,7 +113,10 @@ class GSSAPI:
         return len(self.getData())
 
     def __str__(self):
-        return len(self.getData())
+        return self.getData().hex()
+
+    def __bytes__(self):
+        return self.getData()
 
     def fromString(self, data = None):
         # Manual parse of the GSSAPI Header Format
@@ -191,6 +194,9 @@ class SPNEGO_NegTokenResp:
         return len(self.getData())
 
     def __str__(self):
+        return self.getData().hex()
+
+    def __bytes__(self):
         return self.getData()
 
     def fromString(self, data = 0):
@@ -474,4 +480,3 @@ class SPNEGOCipher:
                 self.__serverSealingHandle = cipher.encrypt
         self.__sequence += 1
         return signature
-

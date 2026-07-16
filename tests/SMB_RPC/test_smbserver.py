@@ -75,6 +75,7 @@
 #         [ ] smb2Cancel
 #
 import unittest
+from unittest.mock import patch
 from time import sleep
 from os.path import exists, join
 from os import mkdir, rmdir, remove
@@ -82,13 +83,15 @@ from multiprocessing import Process
 
 from six import PY2, StringIO, BytesIO, b, assertRaisesRegex, assertCountEqual
 
+from impacket import smb
 from impacket.smb import SMB_DIALECT
-from impacket.smbserver import normalize_path, isInFileJail, SimpleSMBServer, SMBSERVER
+from impacket.smbserver import decodeSMBString, normalize_path, isInFileJail, outputToJohnFormat, SimpleSMBServer, SMBSERVER, TRANSCommands, TRANS2Commands
 from impacket.smbconnection import SMBConnection, SessionError, compute_lmhash, compute_nthash
 from threading import Thread
 
 import select
 import socket
+from six.moves import configparser
 
 class StoppableMixin():
     def serve_forever(self):
@@ -118,6 +121,28 @@ class SMBServerUnitTests(unittest.TestCase):
     """Unit tests for the SMBServer
     """
 
+    @staticmethod
+    def server_with_commented_share():
+        class Server:
+            def __init__(self):
+                self.config = configparser.ConfigParser()
+                self.config.add_section('global')
+                self.config.add_section('TEST')
+                self.config.set('TEST', 'path', '/tmp')
+                self.config.set('TEST', 'share type', '0')
+                self.config.set('TEST', 'comment', 'share comment')
+
+            def getConnectionData(self, conn_id):
+                return {}
+
+            def getServerConfig(self):
+                return self.config
+
+            def setConnectionData(self, conn_id, data):
+                pass
+
+        return Server()
+
     def test_normalize_path(self):
         """Test file path normalization.
         """
@@ -144,6 +169,26 @@ class SMBServerUnitTests(unittest.TestCase):
         self.assertEqual(normalize_path("/filepath", 'path'), "filepath")
         self.assertEqual(normalize_path("//filepath", 'path'), "/filepath")
 
+    def test_decode_non_unicode_smb_path_returns_text(self):
+        decoded = decodeSMBString(0, b'directory\\file.txt')
+
+        self.assertEqual('directory\\file.txt', decoded)
+        self.assertEqual('directory/file.txt', normalize_path(decoded))
+
+    def test_decode_smb_string_preserves_existing_text(self):
+        self.assertEqual(
+            'directory\\file.txt',
+            decodeSMBString(0, 'directory\\file.txt'),
+        )
+
+    def test_john_format_accepts_text_challenge_from_legacy_session(self):
+        result = outputToJohnFormat(
+            '', 'user', 'domain', b'\x00' * 24, b'\x01' * 24
+        )
+
+        self.assertEqual('ntlm', result['hash_version'])
+        self.assertTrue(result['hash_string'].startswith('user::domain:'))
+
     def test_isInFileJail(self):
         """Test validation of common prefix path.
         """
@@ -156,6 +201,79 @@ class SMBServerUnitTests(unittest.TestCase):
         self.assertFalse(isInFileJail(jail_path, "/tmp/filename"))
         self.assertFalse(isInFileJail(jail_path, "../filename"))
         self.assertFalse(isInFileJail(jail_path, "../../filename"))
+
+    def test_lanman_share_comments_are_serialized_as_bytes(self):
+        request = smb.SMBNetShareEnum()
+        request['ParamDesc'] = 'WrLeh'
+        request['DataDesc'] = 'B13BWz'
+        request['InfoLevel'] = 1
+        request['ReceiveBufferSize'] = 65535
+
+        _, _, data, error = TRANSCommands.lanMan(
+            1, self.server_with_commented_share(), {}, request.getData(), b''
+        )
+
+        share_info = smb.NetShareInfo1(data[:20])
+        self.assertEqual(0, error)
+        self.assertEqual(20, share_info['RemarkOffsetLow'])
+        self.assertEqual(b'share comment\x00', data[20:])
+
+    def test_lanman_share_info_comment_offset_is_serialized(self):
+        request = smb.SMBNetShareGetInfo()
+        request['RAPOpcode'] = 1
+        request['ParamDesc'] = 'zWrLh'
+        request['DataDesc'] = 'B13BWz'
+        request['ShareName'] = 'TEST'
+        request['InfoLevel'] = 1
+        request['ReceiveBufferSize'] = 65535
+
+        _, _, data, error = TRANSCommands.lanMan(
+            1, self.server_with_commented_share(), {}, request.getData(), b''
+        )
+
+        share_info = smb.NetShareInfo1(data[:20])
+        self.assertEqual(0, error)
+        self.assertEqual(20, share_info['RemarkOffsetLow'])
+        self.assertEqual(b'share comment\x00', data[20:])
+
+    def test_set_path_information_accepts_path_inside_share(self):
+        class Server:
+            connection_data = {
+                'ConnectedShares': {1: {'path': '/tmp'}},
+            }
+
+            def getConnectionData(self, conn_id):
+                return self.connection_data
+
+            def setConnectionData(self, conn_id, data):
+                self.connection_data = data
+
+            def log(self, message, level=None, connData=None):
+                pass
+
+        parameters = {
+            'FileName': b'file.txt',
+            'InformationLevel': smb.SMB_SET_FILE_BASIC_INFO,
+        }
+        info = {'LastAccessTime': 0, 'LastWriteTime': 0}
+
+        with patch.object(
+            smb, 'SMBSetPathInformation_Parameters', return_value=parameters
+        ), patch.object(
+            smb, 'SMBSetFileBasicInfo', return_value=info
+        ), patch(
+            'impacket.smbserver.isInFileJail', return_value=True
+        ), patch(
+            'impacket.smbserver.os.path.exists', return_value=True
+        ):
+            _, response, _, error = TRANS2Commands.setPathInformation(
+                1, Server(), {'Flags2': 0, 'Tid': 1}, b'', b''
+            )
+
+        self.assertEqual(0, error)
+        self.assertIsInstance(
+            response, smb.SMBSetPathInformationResponse_Parameters
+        )
 
         jail_path = ""
         self.assertTrue(isInFileJail(jail_path, "filename"))

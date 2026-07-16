@@ -23,6 +23,12 @@ from impacket.examples.ntlmrelayx.utils.tcpshell import TcpShell
 
 PROTOCOL_ATTACK_CLASS = "WINRMAttack"
 
+def _required_match(pattern, body, field_name):
+    match = re.search(pattern, body)
+    if match is None:
+        raise RuntimeError("WinRM response does not contain %s" % field_name)
+    return match.group(1)
+
 class WinRMShell(cmd.Cmd):
 
     def __init__(self, tcp_shell, client):
@@ -95,8 +101,11 @@ class WinRMShell(cmd.Cmd):
         res = self.client.getresponse()
 
         # Retrieve ShellID
-        if match := re.search(r'<w:Selector\s+Name="ShellId">(.*?)</w:Selector>', res.read().decode()):
-            self.shell_id = match.group(1)
+        self.shell_id = _required_match(
+            r'<w:Selector\s+Name="ShellId">(.*?)</w:Selector>',
+            res.read().decode(),
+            "ShellId",
+        )
 
     def emptyline(self):
         pass
@@ -148,7 +157,9 @@ class WinRMShell(cmd.Cmd):
         response = self.client.getresponse()
         body = response.read().decode()
 
-        command_id = re.search(r"<rsp:CommandId>(.*?)</rsp:CommandId>", body).group(1)
+        command_id = _required_match(
+            r"<rsp:CommandId>(.*?)</rsp:CommandId>", body, "CommandId"
+        )
         receive_xml = f'''
         <?xml version="1.0" encoding="utf-8"?>
         <env:Envelope

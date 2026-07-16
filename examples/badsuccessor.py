@@ -238,6 +238,7 @@ class BADSUCCESSOR:
             logging.info('Found %d organizational units' % len(ou_entries))
             
             # Get domain SID for filtering excluded accounts
+            domain_sid = None
             try:
                 success = ldapConnection.search(
                     search_base=self.__baseDN,
@@ -252,6 +253,9 @@ class BADSUCCESSOR:
                         domain_sid = entry.objectSid.value
             except Exception as e:
                 logging.error('Failed to retrieve domain SID: %s' % str(e))
+                return False
+            if domain_sid is None:
+                logging.error('Domain SID was not returned by LDAP')
                 return False
             allowed_identities = {}
             

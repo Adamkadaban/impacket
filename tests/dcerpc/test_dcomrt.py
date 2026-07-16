@@ -26,13 +26,81 @@ from __future__ import print_function
 
 import pytest
 import unittest
+from unittest.mock import patch
 from tests import RemoteTestCase
 from tests.dcerpc import DCERPCTests
 
 from impacket import ntlm
 from impacket.uuid import string_to_bin, uuidtup_to_bin
 from impacket.dcerpc.v5 import dcomrt
-from impacket.dcerpc.v5.dcom import scmp, vds, oaut, comev
+from impacket.dcerpc.v5.dcom import scmp, vds, oaut, comev, wmi
+
+
+class DCOMLocalTests(unittest.TestCase):
+
+    def test_idispatch_invoke_uses_variant_reference_values(self):
+        class Dispatch:
+            _iid = b'iid'
+
+            def get_iPid(self):
+                return b'ipid'
+
+            def request(self, request, iid, uuid):
+                self.sent_request = request
+                return b'response'
+
+        dispatch = Dispatch()
+        var_ref_indexes = object()
+        var_refs = object()
+        request = {}
+
+        with patch.object(oaut, 'IDispatch_Invoke', return_value=request):
+            response = oaut.IDispatch.Invoke(
+                dispatch, 1, 2, 3, object(), 1, var_ref_indexes, var_refs
+            )
+
+        self.assertEqual(b'response', response)
+        self.assertIs(var_ref_indexes, request['rgVarRefIdx'])
+        self.assertIs(var_refs, request['rgVarRef'])
+
+    def test_wmi_cim_array_types_include_array_flag(self):
+        type_names = (
+            'SINT8', 'UINT8', 'SINT16', 'UINT16', 'SINT32', 'UINT32',
+            'SINT64', 'UINT64', 'REAL32', 'REAL64', 'BOOLEAN', 'STRING',
+            'DATETIME', 'REFERENCE', 'CHAR16', 'OBJECT',
+        )
+
+        for type_name in type_names:
+            scalar = getattr(wmi.CIM_TYPE_ENUM, 'CIM_TYPE_%s' % type_name)
+            array = getattr(wmi.CIM_TYPE_ENUM, 'CIM_ARRAY_%s' % type_name)
+            self.assertEqual(wmi.CIM_ARRAY_FLAG | scalar.value, array.value)
+
+    def test_extended_objref_initializes_signatures_and_element_count(self):
+        objref = dcomrt.OBJREF_EXTENDED()
+
+        self.assertEqual(0x4E535956, objref['Signature1'])
+        self.assertEqual(1, objref['nElms'])
+        self.assertEqual(0x4E535956, objref['Signature2'])
+
+    def test_special_properties_reserved_fields_round_trip(self):
+        properties = dcomrt.SpecialPropertiesData()
+        properties['Reserved1'] = 1
+        properties['Reserved2'] = 2
+        properties['Reserved3_1'] = 3
+        properties['Reserved3_2'] = 4
+        properties['Reserved3_3'] = 5
+        properties['Reserved3_4'] = 6
+        properties['Reserved3_5'] = 7
+
+        parsed = dcomrt.SpecialPropertiesData(properties.getData())
+
+        self.assertEqual(1, parsed['Reserved1'])
+        self.assertEqual(2, parsed['Reserved2'])
+        self.assertEqual(3, parsed['Reserved3_1'])
+        self.assertEqual(4, parsed['Reserved3_2'])
+        self.assertEqual(5, parsed['Reserved3_3'])
+        self.assertEqual(6, parsed['Reserved3_4'])
+        self.assertEqual(7, parsed['Reserved3_5'])
 
 
 class DCOMTests(DCERPCTests):

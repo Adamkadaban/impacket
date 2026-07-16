@@ -247,7 +247,10 @@ class InterceptServer(asyncore.dispatcher):
         return iconn1, iconn2
 
     def handle_accept(self):
-        conn, addr = self.accept()
+        accepted = self.accept()
+        if accepted is None:
+            return
+        conn, addr = accepted
         downstream, upstream = self.intercept_conns(conn)
         downstream.peer = upstream
         upstream.peer = downstream

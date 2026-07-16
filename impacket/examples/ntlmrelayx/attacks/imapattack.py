@@ -39,6 +39,9 @@ class IMAPAttack(ProtocolAttack):
             LOG.info('Opening mailbox INBOX')
             targetBox = 'INBOX'
             result, data = self.client.select(targetBox,True) #True indicates readonly
+        if not data:
+            LOG.error('Mailbox %s returned no message count' % targetBox)
+            return
         inboxCount = int(data[0])
         LOG.info('Found %s messages in mailbox %s' % (inboxCount, targetBox))
         #If we should not dump all, search for the keyword
@@ -51,7 +54,9 @@ class IMAPAttack(ProtocolAttack):
             dumpMessages = []
             #message IDs are separated by spaces
             for msgs in rawdata:
-                dumpMessages += msgs.split(' ')
+                if isinstance(msgs, bytes):
+                    msgs = msgs.decode('ascii', errors='replace')
+                dumpMessages += msgs.split()
             if self.config.dump_max != 0 and len(dumpMessages) > self.config.dump_max:
                 dumpMessages = dumpMessages[:self.config.dump_max]
         else:
@@ -81,8 +86,18 @@ class IMAPAttack(ProtocolAttack):
                 fileName = 'mail_' + textUserName + '-' + mailboxName + '_' + str(msgIndex) + '.eml'
 
                 #Write it to the file
-                with open(os.path.join(self.config.lootdir,fileName),'w') as of:
-                    of.write(rawMessage[0][1])
+                if (
+                    not rawMessage
+                    or not isinstance(rawMessage[0], (tuple, list))
+                    or len(rawMessage[0]) < 2
+                ):
+                    LOG.error('Message %s did not contain an RFC822 payload' % msgIndex)
+                    continue
+                payload = rawMessage[0][1]
+                if isinstance(payload, str):
+                    payload = payload.encode('utf-8')
+                with open(os.path.join(self.config.lootdir,fileName),'wb') as of:
+                    of.write(payload)
                 LOG.info('Done fetching message %d/%d' % (i+1,numMsgs))
 
         #Close connection cleanly

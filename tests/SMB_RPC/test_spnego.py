@@ -9,7 +9,7 @@
 # for more information.
 #
 import unittest
-from impacket import smb
+from impacket import smb, spnego
 
 
 class Test(unittest.TestCase):
@@ -57,6 +57,15 @@ class Test(unittest.TestCase):
         token['NegState'] = b'\x03'  # request-mic
         token['SupportedMech'] = smb.TypesMech['NTLMSSP - Microsoft NTLM Security Support Provider']
         self.assertEqual(self.negTokenResp4, token.getData())
+
+    def test_asn1_three_byte_length_round_trip(self):
+        payload = b'A' * 0x10000
+        encoded = spnego.asn1encode(payload)
+
+        decoded, consumed = spnego.asn1decode(encoded)
+
+        self.assertEqual(payload, decoded)
+        self.assertEqual(len(encoded), consumed)
 
 
 if __name__ == "__main__":

@@ -169,21 +169,20 @@ class RemoteShell(cmd.Cmd):
                 logging.error(str(e))
 
     def do_lget(self, src_path):
-
+        filename = None
         try:
             import ntpath
             newPath = ntpath.normpath(ntpath.join(self.__pwd, src_path))
             drive, tail = ntpath.splitdrive(newPath)
             filename = ntpath.basename(tail)
-            fh = open(filename, 'wb')
             logging.info("Downloading %s\\%s" % (drive, tail))
-            self.__transferClient.getFile(drive[:-1] + '$', tail, fh.write)
-            fh.close()
+            with open(filename, 'wb') as fh:
+                self.__transferClient.getFile(drive[:-1] + '$', tail, fh.write)
 
         except Exception as e:
             logging.error(str(e))
 
-            if os.path.exists(filename):
+            if filename is not None and os.path.exists(filename):
                 os.remove(filename)
 
     def do_lput(self, s):

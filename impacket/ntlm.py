@@ -241,7 +241,10 @@ class AV_PAIRS:
         return len(self.getData())
 
     def __str__(self):
-        return len(self.getData())
+        return self.getData().hex()
+
+    def __bytes__(self):
+        return self.getData()
 
     def fromString(self, data):
         tInfo = data

@@ -78,7 +78,8 @@ class CheckLDAP:
                 logging.debug(f"LDAPSessionError while checking for channel binding requirements (likely NTLM disabled): {e!s}")
         except SysCallError as e:
             logging.debug(f"Received SysCallError when trying to enumerate channel binding support: {e!s}")
-            if e.args[1] in ["ECONNRESET", "WSAECONNRESET", "Unexpected EOF"]:
+            error_name = e.args[1] if len(e.args) > 1 else str(e)
+            if error_name in ["ECONNRESET", "WSAECONNRESET", "Unexpected EOF"]:
                 cbt_status = "No TLS cert"
             else:
                 raise

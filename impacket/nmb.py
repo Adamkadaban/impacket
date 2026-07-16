@@ -261,7 +261,7 @@ class NetBIOSError(Exception):
         self.error_msg = error_message
 
     def get_error_code(self):
-        return self.error
+        return self.error_code
 
     def getErrorCode(self):
         return self.get_error_code()
@@ -331,6 +331,7 @@ class NBNodeStatusResponse(NBNSResourceRecord):
         for i in range(0, self.num_names):
             res += self.entries[i].getData()
         res += self.statistics.getData() # (RFC 1002) 4.2.18.  NODE STATUS RESPONSE
+        return res
 
 class NBPositiveNameQueryResponse(NBNSResourceRecord):
     def __init__(self, data = 0):

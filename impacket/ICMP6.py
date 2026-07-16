@@ -149,14 +149,20 @@ class ICMP6(Header):
         return s
     
     def __get_message_description(self):
-        return self.icmp_messages[self.get_type()][self.DESCRIPTION_INDEX]
+        message = self.icmp_messages.get(self.get_type())
+        if message is None:
+            return "Unknown"
+        return message[self.DESCRIPTION_INDEX]
     
     def __get_code_description(self):
-        code_dictionary = self.icmp_messages[self.get_type()][self.CODES_INDEX]
+        message = self.icmp_messages.get(self.get_type())
+        if message is None:
+            return ""
+        code_dictionary = message[self.CODES_INDEX]
         if (code_dictionary is None):
             return ""
         else:
-            return code_dictionary[self.get_code()]
+            return code_dictionary.get(self.get_code(), "Unknown")
     
 ############################################################################
     def get_type(self):        

@@ -155,6 +155,9 @@ class Principal:
         return data
 
     def __str__(self):
+        return self.getData().hex()
+
+    def __bytes__(self):
         return self.getData()
 
     def prettyPrint(self):
@@ -281,6 +284,9 @@ class Credential:
         return data
 
     def __str__(self):
+        return self.getData().hex()
+
+    def __bytes__(self):
         return self.getData()
 
     def prettyPrint(self, indent=''):

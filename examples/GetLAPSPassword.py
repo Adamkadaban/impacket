@@ -105,9 +105,9 @@ class GetLAPSPassword:
             tmp,_ = decoder.decode(kek_identifier['other']['keyAttr'])
             sid = tmp['field-1'][0][0][1].asOctets().decode("utf-8") 
             target_sd = create_sd(sid)
-            laps_enabled = True
         except Exception as e:
             logging.error('Cannot unpack msLAPS-EncryptedPassword blob due to error %s' % str(e))
+            return None
         # Check if item is in cache
         if key_id['RootKeyId'] in self.__KDSCache:
             gke = self.__KDSCache[key_id['RootKeyId']]
@@ -131,13 +131,13 @@ class GetLAPSPassword:
                 dce.connect()
             except Exception as e:
                 logging.error("Something went wrong, check error status => %s" % str(e))
-                return laps_enabled
+                return None
             logging.debug("Connected")
             try:
                 dce.bind(MSRPC_UUID_GKDI)
             except Exception as e:
                 logging.error("Something went wrong, check error status => %s" % str(e))
-                return laps_enabled
+                return None
             logging.debug("Successfully bound")
 
 
@@ -216,6 +216,8 @@ class GetLAPSPassword:
                     if str(attribute['type']) == 'msLAPS-EncryptedPassword':
                         lapsv2 = True
                         plaintext = self.getLAPSv2Decrypt(bytes(attribute['vals'][0]))
+                        if plaintext is None:
+                            break
                         r = json.loads(plaintext[:-18].decode('utf-16le'))
                         # timestamp = r["t"]
                         lapsUsername = r["n"]

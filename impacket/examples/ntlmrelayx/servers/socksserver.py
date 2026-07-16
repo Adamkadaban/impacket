@@ -108,8 +108,8 @@ class SOCKS4_REPLY(Structure):
     structure = (
         ('VER','B=0'),
         ('REP','B=0x5A'),
-        ('RSV','<H=0'),
-        ('RSV','<L=0'),
+        ('RSV1','<H=0'),
+        ('RSV2','<L=0'),
     )
 
 activeConnections = Queue()

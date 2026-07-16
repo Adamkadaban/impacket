@@ -109,7 +109,7 @@ class PcapFile:
 
     def write(self, pkt):
         self.writeHeaderOnce()
-        self.file.write(str(pkt))
+        self.file.write(pkt.getData())
 
     def packets(self):
         self.reset()

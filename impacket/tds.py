@@ -2294,6 +2294,8 @@ class MSSQL:
 
             elif _type == TDS_FLTNTYPE:
                 valueSize = ord(data[:1])
+                if valueSize not in (0, 4, 8):
+                    raise ValueError("Invalid TDS FLTNTYPE length: %d" % valueSize)
                 if valueSize == 4:
                     fmt = "<f"
                 elif valueSize == 8:
@@ -2309,10 +2311,8 @@ class MSSQL:
 
             elif _type == TDS_MONEYNTYPE:
                 valueSize = ord(data[:1])
-                if valueSize == 4:
-                    fmt = "<l"
-                elif valueSize == 8:
-                    fmt = "<q"
+                if valueSize not in (0, 4, 8):
+                    raise ValueError("Invalid TDS MONEYNTYPE length: %d" % valueSize)
 
                 data = data[1:]
 
@@ -2355,6 +2355,8 @@ class MSSQL:
                 # date is represented as one 3-byte unsigned integer that represents the number of days since
                 # January 1, year 1.
                 valueSize = ord(data[:1])
+                if valueSize not in (0, 3):
+                    raise ValueError("Invalid TDS DATENTYPE length: %d" % valueSize)
                 data = data[1:]
                 if valueSize > 0:
                     dateBytes = data[:valueSize]
@@ -2397,12 +2399,11 @@ class MSSQL:
             elif _type == TDS_BITNTYPE:
                 # print "BITNTYPE"
                 valueSize = ord(data[:1])
+                if valueSize not in (0, 1):
+                    raise ValueError("Invalid TDS BITNTYPE length: %d" % valueSize)
                 data = data[1:]
                 if valueSize > 0:
-                    if valueSize == 1:
-                        value = ord(data[:valueSize])
-                    else:
-                        value = data[:valueSize]
+                    value = bool(data[0])
                 else:
                     value = None
                 data = data[valueSize:]
@@ -2417,8 +2418,8 @@ class MSSQL:
                     fmt = "<l"
                 elif valueSize == 8:
                     fmt = "<q"
-                else:
-                    fmt = ""
+                elif valueSize != 0:
+                    raise ValueError("Invalid TDS INTNTYPE length: %d" % valueSize)
 
                 data = data[1:]
 
@@ -2428,7 +2429,14 @@ class MSSQL:
                 else:
                     value = None
             elif _type == TDS_SSVARIANTTYPE:
+                if len(data) < 4:
+                    raise ValueError("Truncated TDS SSVARIANT length")
                 totalLength = struct.unpack("<L", data[:4])[0]
+                if len(data) < 4 + totalLength:
+                    raise ValueError(
+                        "Truncated TDS SSVARIANT value: expected %d bytes, got %d"
+                        % (totalLength, len(data) - 4)
+                    )
 
                 # Create variant structure with the entire variant data
                 variantData = data[: 4 + totalLength]

@@ -351,6 +351,7 @@ class SMB3:
 
     def _negotiateSession(self, negSessionResponse = None):
         currentDialect = SMB2_DIALECT_WILDCARD
+        negotiateResponse = None
         if negSessionResponse is not None:
             negotiateResponse = SMB2Negotiate_Response(negSessionResponse['Data'])
             currentDialect = negotiateResponse['DialectRevision']
@@ -371,6 +372,8 @@ class SMB3:
             if answer.isValidAnswer(STATUS_SUCCESS):
                 negotiateResponse = SMB2Negotiate_Response(answer['Data'])
 
+        if negotiateResponse is None:
+            raise RuntimeError("SMB negotiation did not return a valid response")
         return negotiateResponse
 
     def _createSessionSetupRequest(self, dialect):
@@ -544,8 +547,6 @@ class DumpNtlm:
             print("[+] Prefered Dialect: SMB 3.0")
         elif dialect == SMB2_DIALECT_302:
             print("[+] Prefered Dialect: SMB 3.0.2")
-        elif dialect == SMB2_DIALECT_302:
-            print("[+] Prefered Dialect: SMB 3.0.2")
         elif dialect == SMB2_DIALECT_311:
             print("[+] Prefered Dialect: SMB 3.1.1")
         elif type(dialect) is str:
@@ -565,6 +566,7 @@ class DumpNtlm:
         print("[+] Current Time    : {}".format(currentTime))
         if bootTime != 0:
             print("[+] Boot Time       : {}".format(bootTime))
+        if currentTime != 0 and bootTime != 0:
             print("[+] Server Up Time  : {}".format(currentTime - bootTime))
 
 

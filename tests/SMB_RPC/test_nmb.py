@@ -11,6 +11,7 @@
 import pytest
 import unittest
 from binascii import unhexlify
+from unittest.mock import Mock
 from tests import RemoteTestCase
 
 from impacket import nmb
@@ -29,6 +30,12 @@ class NMBLocalTests(unittest.TestCase):
         decoded = nmb.decode_name(encoded)
 
         self.assertEqual(name[:15], decoded[1].strip())
+
+    def test_netbios_error_code(self):
+        error = nmb.NetBIOSError('Session failed', nmb.ERRCLASS_SESSION, 0x82)
+
+        self.assertEqual(0x82, error.get_error_code())
+        self.assertEqual(0x82, error.getErrorCode())
 
     def test_getnetbiosname(self):
         # Arrange
@@ -60,6 +67,14 @@ class NMBLocalTests(unittest.TestCase):
         self.assertEqual(resp[0]['NAME'], name1)
         self.assertEqual(resp[1]['NAME'], name2)
         self.assertEqual(resp[2]['NAME'], name3)
+
+    def test_node_status_raw_data_round_trip(self):
+        response = object.__new__(nmb.NBNodeStatusResponse)
+        response.num_names = 1
+        response.entries = [Mock(getData=Mock(return_value=b'entry'))]
+        response.statistics = Mock(getData=Mock(return_value=b'statistics'))
+
+        self.assertEqual(b'\x01entrystatistics', response.rawData())
 
     def test_gethostbyname(self):
         # Arrange

@@ -483,6 +483,7 @@ if __name__ == '__main__':
 
     domain, username, password, _, _, options.k = parse_identity(options.identity, options.hashes, options.no_pass, options.aesKey, options.k)
 
+    executer = None
     try:
         executer = USERENUM(username, password, domain, options.hashes, options.aesKey, options.k, options)
         executer.run()
@@ -491,8 +492,10 @@ if __name__ == '__main__':
             import traceback
             traceback.print_exc()
         logging.error(e)
-        executer.stop()
+        if executer is not None:
+            executer.stop()
     except KeyboardInterrupt:
         logging.info('Quitting.. please wait') 
-        executer.stop()
+        if executer is not None:
+            executer.stop()
     sys.exit(0)

@@ -496,7 +496,6 @@ class DHCP_BOOTP_IP_RANGE(NDRSTRUCT):
         ('StartAddress', DHCP_IP_ADDRESS),
         ('EndAddress', DHCP_IP_ADDRESS),
         ('BootpAllocated', ULONG),
-        ('MaxBootpAllowed', DHCP_IP_ADDRESS),
         ('MaxBootpAllowed', ULONG ),
     )
 

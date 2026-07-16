@@ -274,7 +274,7 @@ class RemoteStdOutPipe(Pipes):
                             LastDataSent = ''
                         # Just in case this got out of sync, i'm cleaning it up if there are more than 10 chars, 
                         # it will give false positives tho.. we should find a better way to handle this.
-                        if LastDataSent > 10:
+                        if len(LastDataSent) > 10:
                             LastDataSent = ''
                 except:
                     pass
@@ -921,6 +921,10 @@ class MS14_068:
             self.__domainControllers.append(self.__kdcHost)
         else:
             self.__domainControllers = self.getDomainControllers()
+
+        if not self.__domainControllers:
+            logging.error('No domain controllers available to attack')
+            return
 
         userName = Principal(self.__username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
         for dc in self.__domainControllers:

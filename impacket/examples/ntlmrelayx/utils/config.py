@@ -17,6 +17,8 @@
 # Author:
 #  Dirk-jan Mollema / Fox-IT (https://www.fox-it.com)
 #
+from binascii import Error as BinasciiError, unhexlify
+
 from impacket.examples.utils import parse_credentials
 
 
@@ -187,6 +189,18 @@ class NTLMRelayxConfig:
             return
         if machineAccount is None or machineHashes is None or domainIp is None:
             raise Exception("You must specify machine-account/hashes/domain all together!")
+        accountParts = machineAccount.split('/', 1)
+        if len(accountParts) != 2 or not all(accountParts):
+            raise ValueError("Machine account must use the domain/machine_name format")
+        hashParts = machineHashes.split(':', 1)
+        if len(hashParts) != 2:
+            raise ValueError("Machine hashes must use the LMHASH:NTHASH format")
+        try:
+            for machineHash in hashParts:
+                if machineHash:
+                    unhexlify(machineHash)
+        except (BinasciiError, ValueError):
+            raise ValueError("Machine hashes must contain hexadecimal values")
         self.machineAccount = machineAccount
         self.machineHashes = machineHashes
         self.domainIp = domainIp

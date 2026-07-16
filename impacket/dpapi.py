@@ -572,8 +572,8 @@ class DPAPI_BLOB(Structure):
         ('HashAlgo', '<L=0'),
         ('HashAlgoLen', '<L=0'),
 
-        ('HMac', '<L=0'),
-        ('_HMac', '_-HMac', 'self["HMac"]'),
+        ('HMacLen', '<L=0'),
+        ('_HMac', '_-HMac', 'self["HMacLen"]'),
         ('HMac', ':'),
 
         ('DataLen', '<L=0'),
@@ -987,7 +987,7 @@ class VAULT_NGC_ACCOOUNT(Structure):
 
         ('Id3', '<L=0'),
         ('BlobLen', '<L=0'),
-        ('Blob', '_-Blob', 'self["BlobLen"]'),
+        ('_Blob', '_-Blob', 'self["BlobLen"]'),
         ('Blob', ':', NGC_LOCAL_ACCOOUNT),
     )
     def dump(self):
@@ -1035,7 +1035,7 @@ class CREDENTIAL_BLOB(Structure):
         ('Unknown2','<L=0'),
         ('Persist','<L=0'),
         ('AttrCount','<L=0'),
-        ('Unknown3','<Q=0'),
+        ('Unknown3Header','<Q=0'),
 
         ('TargetSize','<L=0'),
         ('_Target','_-Target','self["TargetSize"]'),

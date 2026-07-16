@@ -570,6 +570,8 @@ class LDAPConnection:
         addRequest['attributes'][0]['type'] = 'objectClass'
         addRequest['attributes'][0]['vals'].setComponents(*objectClass)
 
+        if attributes is None:
+            attributes = {}
         index = 1
         for key, value in attributes.items():
             addRequest['attributes'][index]['type'] = key

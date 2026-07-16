@@ -223,6 +223,46 @@ class TDSTests(unittest.TestCase):
         self.assertEqual(value, "7         ")
         self.assertIsInstance(value, str)
 
+    def test_parse_row_rejects_invalid_variable_scalar_lengths(self):
+        invalid_lengths = (
+            (tds.TDS_FLTNTYPE, 3, "FLTNTYPE"),
+            (tds.TDS_MONEYNTYPE, 3, "MONEYNTYPE"),
+            (tds.TDS_DATENTYPE, 2, "DATENTYPE"),
+            (tds.TDS_BITNTYPE, 2, "BITNTYPE"),
+            (tds.TDS_INTNTYPE, 3, "INTNTYPE"),
+        )
+
+        for col_type, value_size, type_name in invalid_lengths:
+            with self.subTest(type_name=type_name):
+                client = tds.MSSQL("server")
+                client.colMeta = [{"Type": col_type, "Name": "value"}]
+                with self.assertRaisesRegex(
+                    ValueError, "Invalid TDS %s length" % type_name
+                ):
+                    client.parseRow(
+                        {
+                            "TokenType": tds.TDS_ROW_TOKEN,
+                            "Data": bytes([value_size]) + b"\x00" * value_size,
+                        }
+                    )
+
+    def test_parse_row_bitn_returns_boolean(self):
+        value = self._parse_single_column_row(tds.TDS_BITNTYPE, b"\x01\x01")
+
+        self.assertIs(value, True)
+
+    def test_parse_row_rejects_truncated_sql_variant(self):
+        client = tds.MSSQL("server")
+        client.colMeta = [{"Type": tds.TDS_SSVARIANTTYPE, "Name": "value"}]
+
+        with self.assertRaisesRegex(ValueError, "Truncated TDS SSVARIANT value"):
+            client.parseRow(
+                {
+                    "TokenType": tds.TDS_ROW_TOKEN,
+                    "Data": struct.pack("<L", 4) + b"\x00",
+                }
+            )
+
 
 class MSSQLSocksRelayTests(unittest.TestCase):
     @staticmethod

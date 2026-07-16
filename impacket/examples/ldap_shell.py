@@ -104,9 +104,9 @@ class LdapShell(cmd.Cmd):
 
     def do_write_gpo_dacl(self, line):
         args = shlex.split(line)
-        print ("Adding %s to GPO with GUID %s" % (args[0], args[1]))
         if len(args) != 2:
             raise Exception("A samaccountname and GPO sid are required.")
+        print ("Adding %s to GPO with GUID %s" % (args[0], args[1]))
 
         tgtUser = args[0]
         gposid = args[1]
@@ -141,7 +141,7 @@ class LdapShell(cmd.Cmd):
         if not self.client.server.ssl and not self.client.tls_started:
             print("Error adding a new computer with LDAP requires LDAPS.")
 
-        if len(args) != 1 and len(args) != 2 and len(args) !=3:
+        if len(args) not in (1, 2, 3):
             raise Exception("Error expected a computer name, an optional password argument, and an optional nospns argument.")
 
         computer_name = args[0]
@@ -172,7 +172,7 @@ class LdapShell(cmd.Cmd):
                     'HOST/%s.%s' % (computer_hostname, domain)
                 ]
             else:
-                raise Exception("Invalid third argument: %s" %str(args[3]))     
+                raise Exception("Invalid third argument: %s" % str(args[2]))
         elif len(args) == 2:
             if args[1] != "nospns":
                 spns = [
@@ -192,8 +192,6 @@ class LdapShell(cmd.Cmd):
                 'RestrictedKrbHost/%s' % computer_hostname,
                 'RestrictedKrbHost/%s.%s' % (computer_hostname, domain),
             ]
-        else:
-            raise Exception("Invalid third argument: %s" %str(self.args[3])) 
         ucd = {
             'dnsHostName': '%s.%s' % (computer_hostname, domain),
             'userAccountControl': 4096,
