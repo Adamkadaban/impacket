@@ -548,7 +548,7 @@ class CCache:
         credential.secondTicket['length'] = 0
         self.credentials.append(credential)
 
-    def fromTGS(self, tgs, oldSessionKey, sessionKey):
+    def fromTGS(self, tgs, oldSessionKey, sessionKey, replyKeyUsage=None):
         self.headers = []
         header = Header()
         header['tag'] = 1
@@ -571,7 +571,13 @@ class CCache:
         # Key Usage 8
         # TGS-REP encrypted part (includes application session
         # key), encrypted with the TGS session key (Section 5.4.2)
-        plainText = cipher.decrypt(oldSessionKey, 8, cipherText)
+        if replyKeyUsage is None:
+            # Implicit FAST requires an authenticator subkey, hence reply usage 9.
+            armored = decodedTGS['padata'].hasValue() and any(
+                int(pa['padata-type']) == constants.PreAuthenticationDataTypes.PA_FX_FAST.value
+                for pa in decodedTGS['padata'])
+            replyKeyUsage = 9 if armored else 8
+        plainText = cipher.decrypt(oldSessionKey, replyKeyUsage, cipherText)
 
         encTGSRepPart = decoder.decode(plainText, asn1Spec = EncTGSRepPart())[0]
 
