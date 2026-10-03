@@ -277,6 +277,50 @@ class LastReq(univ.SequenceOf):
 class METHOD_DATA(univ.SequenceOf):
     componentType = PA_DATA()
 
+class KrbFastArmor(univ.Sequence):
+    componentType = namedtype.NamedTypes(
+        _sequence_component('armor-type', 0, Int32()),
+        _sequence_component('armor-value', 1, univ.OctetString()))
+
+class KrbFastReq(univ.Sequence):
+    componentType = namedtype.NamedTypes(
+        _sequence_component('fast-options', 0, KerberosFlags()),
+        _sequence_component('padata', 1, METHOD_DATA()),
+        _sequence_component('req-body', 2, KDC_REQ_BODY()))
+
+class KrbFastArmoredReq(univ.Sequence):
+    componentType = namedtype.NamedTypes(
+        _sequence_optional_component('armor', 0, KrbFastArmor()),
+        _sequence_component('req-checksum', 1, Checksum()),
+        _sequence_component('enc-fast-req', 2, EncryptedData()))
+
+class PA_FX_FAST_REQUEST(univ.Choice):
+    componentType = namedtype.NamedTypes(
+        _sequence_component('armored-data', 0, KrbFastArmoredReq()))
+
+class KrbFastFinished(univ.Sequence):
+    componentType = namedtype.NamedTypes(
+        _sequence_component('timestamp', 0, KerberosTime()),
+        _sequence_component('usec', 1, Microseconds()),
+        _sequence_component('crealm', 2, Realm()),
+        _sequence_component('cname', 3, PrincipalName()),
+        _sequence_component('ticket-checksum', 4, Checksum()))
+
+class KrbFastResponse(univ.Sequence):
+    componentType = namedtype.NamedTypes(
+        _sequence_component('padata', 0, METHOD_DATA()),
+        _sequence_optional_component('strengthen-key', 1, EncryptionKey()),
+        _sequence_optional_component('finished', 2, KrbFastFinished()),
+        _sequence_component('nonce', 3, UInt32()))
+
+class KrbFastArmoredRep(univ.Sequence):
+    componentType = namedtype.NamedTypes(
+        _sequence_component('enc-fast-rep', 0, EncryptedData()))
+
+class PA_FX_FAST_REPLY(univ.Choice):
+    componentType = namedtype.NamedTypes(
+        _sequence_component('armored-data', 0, KrbFastArmoredRep()))
+
 class EncKDCRepPart(univ.Sequence):
     componentType = namedtype.NamedTypes(
         _sequence_component('key', 0, EncryptionKey()),
