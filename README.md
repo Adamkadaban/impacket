@@ -93,6 +93,19 @@ Using Impacket's image:
 
       $ docker run -it --rm "impacket:latest"
 
+### Kerberos FAST
+
+Set `IMPACKET_KRB5_ARMOR_CCACHE` to a ccache containing an unexpired TGT and its session key for the target realm to use FAST for initial authentication. This is separate from `KRB5CCNAME`, which selects the user's normal credential cache. The armor cache is not a password or hash file, and Impacket does not create computer accounts automatically.
+
+    export IMPACKET_KRB5_ARMOR_CCACHE=/path/to/armor.ccache
+    python examples/getTGT.py EXAMPLE.COM/user -dc-ip 192.0.2.10
+
+The shared `getKerberosTGT()` API also accepts an `armorCache` path; an empty string disables the environment setting for that call. Configured FAST authentication does not fall back to unarmored requests. Without armor configured, ordinary authentication is unchanged; a policy rejection includes a FAST configuration hint, not a claim that FAST caused the rejection.
+
+The shared `getKerberosTGS()` API supports implicit FAST using the user's TGT. It selects FAST when the armor environment variable is set, the supplied TGT reply contains FAST, or an ordinary request receives a policy rejection or an empty/closed response. `useFAST=True` forces it and `useFAST=False` disables the retry. The returned third tuple member is the effective reply-decryption key; `CCache.fromTGS()` handles the FAST subkey usage automatically and accepts an explicit `replyKeyUsage` override.
+
+This covers callers of those shared APIs, including ordinary `getTGT.py` and `getST.py` requests and SMB/LDAP Kerberos login. Code that constructs requests directly and calls `sendReceive()` bypasses this support, including the custom S4U/U2U paths in `getST.py`. Explicit machine armor for compound-identity TGS requests is not implemented; device-dependent authentication policies may require it.
+
 Testing
 =======
 
