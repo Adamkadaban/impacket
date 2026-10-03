@@ -473,7 +473,8 @@ def getKerberosTGT(clientName, password, domain, lmhash, nthash, aesKey='', kdcH
 
     return tgt, cipher, key, sessionKey
 
-def getKerberosTGS(serverName, domain, kdcHost, tgt, cipher, sessionKey, renew = False, etypes = None):
+def getKerberosTGS(serverName, domain, kdcHost, tgt, cipher, sessionKey, renew = False, etypes = None, useFAST = None):
+    """Return the wire reply, service cipher, reply decryption key, and service session key."""
 
     requestEtypes = getKerberosTGSRequestEnctypes(etypes)
 
@@ -554,7 +555,22 @@ def getKerberosTGS(serverName, domain, kdcHost, tgt, cipher, sessionKey, renew =
     seq_set_iter(reqBody, 'etype', requestEtypes)
 
     message = encoder.encode(tgsReq)
-    r = sendReceive(message, domain, kdcHost)
+    armoredTGT = decodedTGT['padata'].hasValue() and any(
+        int(pa['padata-type']) == constants.PreAuthenticationDataTypes.PA_FX_FAST.value for pa in decodedTGT['padata'])
+    fast = None
+    if useFAST is True or (useFAST is None and (os.getenv(ARMOR_CACHE_ENV) or armoredTGT)):
+        fast = FastContext.for_tgs(apReq, authenticator, sessionKey)
+        r = _sendFast(tgsReq, domain, kdcHost, fast)
+    else:
+        try:
+            r = sendReceive(message, domain, kdcHost)
+        except (KerberosError, EOFError) as error:
+            if useFAST is False or (isinstance(error, KerberosError) and
+                                    error.getErrorCode() != constants.ErrorCodes.KDC_ERR_POLICY.value):
+                raise
+            LOG.debug('KDC did not accept the TGS request; retrying with FAST')
+            fast = FastContext.for_tgs(apReq, authenticator, sessionKey)
+            r = _sendFast(tgsReq, domain, kdcHost, fast)
 
     # Get the session key
 
@@ -565,9 +581,19 @@ def getKerberosTGS(serverName, domain, kdcHost, tgt, cipher, sessionKey, renew =
     # Key Usage 8
     # TGS-REP encrypted part (includes application session
     # key), encrypted with the TGS session key (Section 5.4.2)
-    plainText = cipher.decrypt(sessionKey, 8, cipherText)
+    replyKey = sessionKey
+    replyKeyUsage = 8
+    if fast:
+        replyKey = fast.reply_key(fast.subkey)
+        replyKeyUsage = 9
+        if int(tgs['enc-part']['etype']) != replyKey.enctype:
+            raise ValueError('FAST TGS reply enctype does not match the reply key')
+    replyCipher = _enctype_table[replyKey.enctype] if fast else cipher
+    plainText = replyCipher.decrypt(replyKey, replyKeyUsage, cipherText)
 
     encTGSRepPart = decoder.decode(plainText, asn1Spec = EncTGSRepPart())[0]
+    if fast and int(encTGSRepPart['nonce']) != fast.nonce:
+        raise ValueError('TGS reply nonce does not match the FAST request')
 
     newSessionKey = Key(encTGSRepPart['key']['keytype'], encTGSRepPart['key']['keyvalue'].asOctets())
     # Creating new cipher based on received keytype
@@ -580,11 +606,12 @@ def getKerberosTGS(serverName, domain, kdcHost, tgt, cipher, sessionKey, renew =
 
     if spn.components[0] == serverName.components[0]:
         # Yes.. bye bye
-        return r, cipher, sessionKey, newSessionKey
+        return r, cipher, replyKey, newSessionKey
     else:
         # Let's extract the Ticket, change the domain and keep asking
         domain = spn.components[1]
-        return getKerberosTGS(serverName, domain, kdcHost, r, cipher, newSessionKey, etypes=requestEtypes)
+        return getKerberosTGS(serverName, domain, kdcHost, r, cipher, newSessionKey, etypes=requestEtypes,
+                              useFAST=True if fast else useFAST)
 
 ################################################################################
 # DCE RPC Helpers
