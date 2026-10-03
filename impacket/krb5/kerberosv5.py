@@ -18,6 +18,7 @@
 #
 
 import datetime
+import os
 import random
 import socket
 import struct
@@ -42,6 +43,7 @@ from impacket.spnego import SPNEGO_NegTokenInit, TypesMech, SPNEGO_NegTokenResp,
 from impacket.krb5.gssapi import KRB5_AP_REQ
 from impacket import nt_errors, LOG
 from impacket.krb5.ccache import CCache
+from impacket.krb5.fast import FastContext, ARMOR_CACHE_ENV, decode as fast_decode
 
 # Our random number generator
 try:
@@ -80,6 +82,16 @@ def getKerberosTGSRequestEnctypes(etypes=None):
     return normalizedEtypes
 
 
+def _recvExact(sock, length):
+    data = bytearray()
+    while len(data) < length:
+        block = sock.recv(length - len(data))
+        if not block:
+            raise EOFError('KDC closed the connection before sending a complete reply')
+        data.extend(block)
+    return bytes(data)
+
+
 def sendReceive(data, host, kdcHost, port=88):
     if kdcHost is None:
         targetHost = host
@@ -92,17 +104,21 @@ def sendReceive(data, host, kdcHost, port=88):
     try:
         af, socktype, proto, canonname, sa = socket.getaddrinfo(targetHost, port, 0, socket.SOCK_STREAM)[0]
         s = socket.socket(af, socktype, proto)
-        s.connect(sa)
     except socket.error as e:
         raise socket.error("Connection error (%s:%s)" % (targetHost, port), e)
 
-    s.sendall(messageLen + data)
-
-    recvDataLen = struct.unpack('!i', s.recv(4))[0]
-
-    r = s.recv(recvDataLen)
-    while len(r) < recvDataLen:
-        r += s.recv(recvDataLen-len(r))
+    with s:
+        try:
+            s.connect(sa)
+        except socket.error as e:
+            raise socket.error("Connection error (%s:%s)" % (targetHost, port), e)
+        s.sendall(messageLen + data)
+        recvDataLen = struct.unpack('!i', _recvExact(s, 4))[0]
+        if recvDataLen == 0:
+            raise EOFError('KDC returned an empty reply')
+        if recvDataLen < 0:
+            raise ValueError('Invalid KDC reply length')
+        r = _recvExact(s, recvDataLen)
 
     try:
         krbError = KerberosError(packet = decoder.decode(r, asn1Spec = KRB_ERROR())[0])
@@ -124,7 +140,41 @@ def sendReceive(data, host, kdcHost, port=88):
 
     return r
 
-def getKerberosTGT(clientName, password, domain, lmhash, nthash, aesKey='', kdcHost=None, requestPAC=True, serverName=None, kerberoast_no_preauth=False):
+def _sendFast(request, domain, kdcHost, fast, key=None):
+    for attempt in range(3):
+        wrapped = fast.wrap(request, key)
+        try:
+            raw = sendReceive(encoder.encode(wrapped), domain, kdcHost)
+        except KerberosError as error:
+            if not error.getErrorPacket():
+                raise
+            reply = error.getErrorPacket()
+            raw = encoder.encode(reply)
+        else:
+            try:
+                reply = fast_decode(raw, KRB_ERROR())
+            except PyAsn1Error:
+                schema = AS_REP() if int(request['msg-type']) == 10 else TGS_REP()
+                reply = fast_decode(raw, schema)
+        fast.unwrap(reply)
+        if int(reply['msg-type']) != 30:
+            return raw
+        error = fast.get_error()
+        code = int(error['error-code'])
+        if key is None and int(request['msg-type']) == 10 and code in (25, 91):
+            return raw
+        if code not in (25, 91) or not fast.cookies or attempt == 2:
+            raise KerberosError(packet=error)
+    raise ValueError('FAST preauthentication did not complete')
+
+
+def _armorHint(error):
+    if error.getErrorCode() == constants.ErrorCodes.KDC_ERR_POLICY.value:
+        error.message = ('If this policy requires FAST, set %s to a valid armor TGT ccache; '
+                         'a policy error alone does not establish that FAST is required.' % ARMOR_CACHE_ENV)
+
+
+def getKerberosTGT(clientName, password, domain, lmhash, nthash, aesKey='', kdcHost=None, requestPAC=True, serverName=None, kerberoast_no_preauth=False, armorCache=None):
 
     # Convert to binary form, just in case we're receiving strings
     if isinstance(lmhash, str):
@@ -214,11 +264,17 @@ def getKerberosTGT(clientName, password, domain, lmhash, nthash, aesKey='', kdcH
 
     seq_set_iter(reqBody, 'etype', supportedCiphers)
 
+    if armorCache is None:
+        armorCache = os.getenv(ARMOR_CACHE_ENV)
+    fast = FastContext.from_ccache(armorCache, domain, supportedCiphers[0]) if armorCache else None
     message = encoder.encode(asReq)
 
     try:
-        r = sendReceive(message, domain, kdcHost)
+        r = _sendFast(asReq, domain, kdcHost, fast) if fast else sendReceive(message, domain, kdcHost)
     except KerberosError as e:
+        if fast:
+            raise
+        _armorHint(e)
         if e.getErrorCode() == constants.ErrorCodes.KDC_ERR_ETYPE_NOSUPP.value:
             if supportedCiphers[0] in (constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value, constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value) and aesKey == b'':
                 supportedCiphers = (int(constants.EncryptionTypes.rc4_hmac.value),)
@@ -242,14 +298,15 @@ def getKerberosTGT(clientName, password, domain, lmhash, nthash, aesKey='', kdcH
         preAuth = False
 
     encryptionTypesData = dict()
+    encryptionTypesParams = dict()
     salt = ''
     if preAuth is False:
         # In theory, we should have the right credentials for the etype specified before.
-        methods = asRep['padata']
+        methods = fast.response['padata'] if fast else asRep['padata']
         encryptionTypesData[supportedCiphers[0]] = salt # handle RC4 fallback, we don't need any salt
         tgt = r
     else:
-        methods = decoder.decode(asRep['e-data'], asn1Spec=METHOD_DATA())[0]
+        methods = fast.response['padata'] if fast else decoder.decode(asRep['e-data'], asn1Spec=METHOD_DATA())[0]
 
     for method in methods:
         if method['padata-type'] == constants.PreAuthenticationDataTypes.PA_ETYPE_INFO2.value:
@@ -264,6 +321,8 @@ def getKerberosTGT(clientName, password, domain, lmhash, nthash, aesKey='', kdcH
                     salt = ''
 
                 encryptionTypesData[etype2['etype']] = salt.encode('utf-8')
+                if etype2['s2kparams'].hasValue():
+                    encryptionTypesParams[int(etype2['etype'])] = etype2['s2kparams'].asOctets()
         elif method['padata-type'] == constants.PreAuthenticationDataTypes.PA_ETYPE_INFO.value:
             etypes = decoder.decode(method['padata-value'], asn1Spec = ETYPE_INFO())[0]
             for etype in etypes:
@@ -287,12 +346,15 @@ def getKerberosTGT(clientName, password, domain, lmhash, nthash, aesKey='', kdcH
     elif aesKey != b'':
         key = Key(cipher.enctype, aesKey)
     elif enctype not in encryptionTypesData:
+        if fast:
+            raise ValueError('KDC did not provide a salt for the requested FAST enctype')
         # No salt for this etype (e.g. no AES key on the account), fall back to RC4.
         from impacket.ntlm import compute_lmhash, compute_nthash
         return getKerberosTGT(clientName, password, domain, compute_lmhash(password), compute_nthash(password),
-                              aesKey, kdcHost, requestPAC, serverName, kerberoast_no_preauth)
+                              aesKey, kdcHost, requestPAC, serverName, kerberoast_no_preauth, armorCache)
     else:
-        key = cipher.string_to_key(password, encryptionTypesData[enctype], None)
+        key = cipher.string_to_key(password, encryptionTypesData[enctype],
+                                   encryptionTypesParams.get(enctype) if fast else None)
 
     if preAuth is True:
         if enctype in encryptionTypesData is False:
@@ -355,19 +417,27 @@ def getKerberosTGT(clientName, password, domain, lmhash, nthash, aesKey='', kdcH
         seq_set_iter(reqBody, 'etype', ( (int(cipher.enctype),)))
 
         try:
-            tgt = sendReceive(encoder.encode(asReq), domain, kdcHost)
-        except Exception as e:
-            if str(e).find('KDC_ERR_ETYPE_NOSUPP') >= 0:
+            tgt = _sendFast(asReq, domain, kdcHost, fast, key) if fast else sendReceive(encoder.encode(asReq), domain, kdcHost)
+        except KerberosError as e:
+            if fast:
+                raise
+            _armorHint(e)
+            if e.getErrorCode() == constants.ErrorCodes.KDC_ERR_ETYPE_NOSUPP.value:
                 if lmhash == b'' and nthash == b'' and (aesKey == b'' or aesKey is None):
                     from impacket.ntlm import compute_lmhash, compute_nthash
                     lmhash = compute_lmhash(password)
                     nthash = compute_nthash(password)
-                    return getKerberosTGT(clientName, password, domain, lmhash, nthash, aesKey, kdcHost, requestPAC)
+                    return getKerberosTGT(clientName, password, domain, lmhash, nthash, aesKey, kdcHost, requestPAC,
+                                          serverName, kerberoast_no_preauth, armorCache)
             raise
 
 
         asRep = decoder.decode(tgt, asn1Spec = AS_REP())[0]
 
+    if fast:
+        key = fast.reply_key(key, challenge=preAuth)
+        if int(asRep['enc-part']['etype']) != key.enctype:
+            raise ValueError('FAST AS reply enctype does not match the reply key')
     # So, we have the TGT, now extract the new session key and finish
     cipherText = asRep['enc-part']['cipher']
 
@@ -392,6 +462,8 @@ def getKerberosTGT(clientName, password, domain, lmhash, nthash, aesKey='', kdcH
                 raise SessionKeyDecryptionError(error_msg, asRep, cipher, key, cipherText)
         raise
     encASRepPart = decoder.decode(plainText, asn1Spec = EncASRepPart())[0]
+    if fast and int(encASRepPart['nonce']) != fast.nonce:
+        raise ValueError('AS reply nonce does not match the FAST request')
 
     # Get the session key and the ticket
     cipher = _enctype_table[encASRepPart['key']['keytype']]
@@ -732,10 +804,11 @@ class KerberosError(SessionError):
     SMB version used. We'll take care of that. NETBIOS exceptions are NOT included,
     since all SMB versions share the same NETBIOS instances.
     """
-    def __init__( self, error = 0, packet=0):
+    def __init__( self, error = 0, packet=0, message=None):
         SessionError.__init__(self)
         self.error = error
         self.packet = packet
+        self.message = message
         if packet != 0:
             self.error = self.packet['error-code']
 
@@ -775,4 +848,6 @@ class KerberosError(SessionError):
         except Exception:
             pass
 
+        if self.message:
+            retString += '\n' + self.message
         return retString
